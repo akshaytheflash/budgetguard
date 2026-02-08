@@ -1,0 +1,176 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { User, Lock, LogIn, UserPlus } from 'lucide-react';
+
+const API_URL = 'http://localhost:8000';
+
+export default function Login({ onLogin }) {
+    const [isRegister, setIsRegister] = useState(false);
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const endpoint = isRegister ? '/register' : '/login';
+            const response = await fetch(`${API_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Authentication failed');
+            }
+
+            // Store token and call onLogin
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('username', data.username);
+            onLogin(data.token, data.has_budget || false);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="container" style={{ maxWidth: '500px', paddingTop: '80px' }}>
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card"
+            >
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.2, type: 'spring' }}
+                        style={{
+                            width: '80px',
+                            height: '80px',
+                            background: 'var(--gradient-primary)',
+                            borderRadius: '24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 20px'
+                        }}
+                    >
+                        {isRegister ? <UserPlus size={40} color="white" /> : <LogIn size={40} color="white" />}
+                    </motion.div>
+
+                    <h1 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '12px' }}>
+                        {isRegister ? 'Create Account' : 'Welcome Back'}
+                    </h1>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '16px' }}>
+                        {isRegister ? 'Join BudgetGuard today' : 'Sign in to your account'}
+                    </p>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit}>
+                    <div className="input-group">
+                        <label className="input-label">Username</label>
+                        <div style={{ position: 'relative' }}>
+                            <User size={20} style={{
+                                position: 'absolute',
+                                left: '16px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--text-secondary)'
+                            }} />
+                            <input
+                                type="text"
+                                className="input-field"
+                                style={{ paddingLeft: '48px' }}
+                                placeholder="Enter your username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                required
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+
+                    <div className="input-group">
+                        <label className="input-label">Password</label>
+                        <div style={{ position: 'relative' }}>
+                            <Lock size={20} style={{
+                                position: 'absolute',
+                                left: '16px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--text-secondary)'
+                            }} />
+                            <input
+                                type="password"
+                                className="input-field"
+                                style={{ paddingLeft: '48px' }}
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {error && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            style={{
+                                padding: '12px 16px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '12px',
+                                color: 'var(--danger)',
+                                fontSize: '14px',
+                                marginBottom: '20px'
+                            }}
+                        >
+                            {error}
+                        </motion.div>
+                    )}
+
+                    <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={loading}
+                        style={{ width: '100%', marginBottom: '16px' }}
+                    >
+                        {loading ? 'Please wait...' : (isRegister ? 'Create Account' : 'Sign In')}
+                    </button>
+
+                    <div style={{ textAlign: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsRegister(!isRegister);
+                                setError('');
+                            }}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--primary-start)',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                textDecoration: 'underline'
+                            }}
+                        >
+                            {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
+                        </button>
+                    </div>
+                </form>
+            </motion.div>
+        </div>
+    );
+}
