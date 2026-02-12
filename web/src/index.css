@@ -7,23 +7,36 @@
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  
+
   --bg-dark: #0a0a0f;
   --bg-card: #1a1a24;
   --bg-card-hover: #252533;
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
   --border: #2a2a3a;
-  
+
   /* Gradients */
   --gradient-primary: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%);
   --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  
+
   /* Glassmorphism */
   --glass-bg: rgba(26, 26, 36, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Light Theme */
+:root[data-theme="light"] {
+  --bg-dark: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f0f2;
+  --text-primary: #1a1a1f;
+  --text-secondary: #6b6b7b;
+  --border: #e0e0e5;
+
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -79,7 +92,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
 }
 
@@ -197,6 +210,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -207,15 +221,19 @@ body {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -304,12 +322,12 @@ body {
   .container {
     padding: 20px 16px;
   }
-  
+
   .glass-card {
     padding: 20px;
     border-radius: 20px;
   }
-  
+
   .btn {
     padding: 12px 24px;
     font-size: 14px;

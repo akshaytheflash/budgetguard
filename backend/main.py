@@ -40,10 +40,18 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
+                email TEXT,
+                phone TEXT,
                 password_hash TEXT NOT NULL,
                 monthly_budget REAL DEFAULT 0,
                 emergency_fund REAL DEFAULT 0,
                 emergency_pin TEXT,
+                is_premium INTEGER DEFAULT 0,
+                coin_balance INTEGER DEFAULT 0,
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                total_trees_planted INTEGER DEFAULT 0,
+                tree_progress INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -57,6 +65,7 @@ def init_db():
                 description TEXT NOT NULL,
                 category TEXT DEFAULT 'general',
                 is_useful INTEGER DEFAULT NULL,
+                is_verified INTEGER DEFAULT 1,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
@@ -73,6 +82,45 @@ def init_db():
             )
         """)
         
+        # Streak history table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS streak_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                has_savings INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE(user_id, date)
+            )
+        """)
+        
+        # Scam detection history
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scam_checks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                message_text TEXT NOT NULL,
+                risk_score REAL,
+                risk_level TEXT,
+                explanation TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        
+        # Coin redemptions
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS coin_redemptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                brand TEXT NOT NULL,
+                coins_spent INTEGER NOT NULL,
+                redemption_code TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        
         conn.commit()
 
 # Initialize database on startup
@@ -82,6 +130,8 @@ init_db()
 class RegisterRequest(BaseModel):
     username: str
     password: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -96,6 +146,7 @@ class AddTransactionRequest(BaseModel):
     amount: float
     description: str
     category: Optional[str] = "general"
+    is_verified: Optional[bool] = True
 
 class MarkTransactionRequest(BaseModel):
     transaction_id: int
@@ -106,6 +157,14 @@ class SimulatePaymentRequest(BaseModel):
     description: str
     use_emergency: bool = False
     emergency_pin: Optional[str] = None
+
+class ScamCheckRequest(BaseModel):
+    message_text: str
+
+class RedeemCoinsRequest(BaseModel):
+    brand: str
+    coins_required: int
+
 
 # Helper functions
 def hash_password(password: str) -> str:
@@ -130,6 +189,84 @@ def get_user_from_token(token: str) -> Optional[dict]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+def update_streak_and_trees(user_id: int):
+    """Update user's streak and tree progress based on daily verified transactions"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get today's date
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # Check if user has a verified transaction today
+        cursor.execute("""
+            SELECT COUNT(*) FROM transactions
+            WHERE user_id = ? AND DATE(timestamp) = ? AND is_verified = 1
+        """, (user_id, today))
+        
+        has_transaction_today = cursor.fetchone()[0] > 0
+        
+        # Update or insert streak history for today
+        cursor.execute("""
+            INSERT OR REPLACE INTO streak_history (user_id, date, has_savings)
+            VALUES (?, ?, ?)
+        """, (user_id, today, 1 if has_transaction_today else 0))
+        
+        # Calculate current streak
+        cursor.execute("""
+            SELECT date FROM streak_history
+            WHERE user_id = ? AND has_savings = 1
+            ORDER BY date DESC
+        """, (user_id,))
+        
+        dates = [row[0] for row in cursor.fetchall()]
+        current_streak = 0
+        
+        if dates:
+            # Count consecutive days from today backwards
+            current_date = datetime.now()
+            for date_str in dates:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                if (current_date - date_obj).days == current_streak:
+                    current_streak += 1
+                else:
+                    break
+        
+        # Get current user data
+        cursor.execute("SELECT longest_streak, tree_progress, total_trees_planted FROM users WHERE id = ?", (user_id,))
+        user_data = cursor.fetchone()
+        longest_streak = max(current_streak, user_data[0] if user_data else 0)
+        tree_progress = user_data[1] if user_data else 0
+        total_trees = user_data[2] if user_data else 0
+        
+        # Update tree progress (every 7 consecutive days = 1 tree)
+        if current_streak > 0 and current_streak % 7 == 0 and current_streak > tree_progress:
+            tree_progress = current_streak
+            total_trees += 1
+        
+        # Calculate tree progress within current cycle (0-6)
+        tree_progress_display = current_streak % 7
+        
+        # Update user
+        cursor.execute("""
+            UPDATE users 
+            SET current_streak = ?, longest_streak = ?, tree_progress = ?, total_trees_planted = ?
+            WHERE id = ?
+        """, (current_streak, longest_streak, tree_progress_display, total_trees, user_id))
+        
+        conn.commit()
+        
+        return current_streak, tree_progress_display, total_trees
+
+def award_coins(user_id: int, amount: int = 1):
+    """Award coins to user for verified transactions"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE users SET coin_balance = coin_balance + ?
+            WHERE id = ?
+        """, (amount, user_id))
+        conn.commit()
+
 # API Endpoints
 @app.post("/register")
 async def register(request: RegisterRequest):
@@ -145,8 +282,8 @@ async def register(request: RegisterRequest):
         # Create user
         password_hash = hash_password(request.password)
         cursor.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            (request.username, password_hash)
+            "INSERT INTO users (username, email, phone, password_hash) VALUES (?, ?, ?, ?)",
+            (request.username, request.email, request.phone, password_hash)
         )
         conn.commit()
         user_id = cursor.lastrowid
@@ -250,15 +387,21 @@ async def add_transaction(request: AddTransactionRequest, token: str, emergency_
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO transactions (user_id, amount, description, category)
-            VALUES (?, ?, ?, ?)
-        """, (user['id'], request.amount, request.description, request.category))
+            INSERT INTO transactions (user_id, amount, description, category, is_verified)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user['id'], request.amount, request.description, request.category, 1 if request.is_verified else 0))
         conn.commit()
         txn_id = cursor.lastrowid
     
+    # Award coins and update streaks for verified transactions
+    if request.is_verified:
+        award_coins(user['id'], 1)
+        update_streak_and_trees(user['id'])
+    
     return {
         "message": "Transaction added",
-        "transaction_id": txn_id
+        "transaction_id": txn_id,
+        "coins_earned": 1 if request.is_verified else 0
     }
 
 @app.post("/mark_transaction")
@@ -286,6 +429,12 @@ async def get_dashboard(token: str):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    # Update streaks first
+    update_streak_and_trees(user['id'])
+    
+    # Refresh user data
+    user = get_user_from_token(token)
+    
     with get_db() as conn:
         cursor = conn.cursor()
         
@@ -300,10 +449,15 @@ async def get_dashboard(token: str):
         transactions = []
         cumulative_spend = 0
         chart_data = []
+        category_totals = {}
         
         for row in cursor.fetchall():
             txn = dict(row)
             cumulative_spend += txn['amount']
+            
+            # Category breakdown
+            category = txn['category'] or 'general'
+            category_totals[category] = category_totals.get(category, 0) + txn['amount']
             
             transactions.append({
                 "id": txn['id'],
@@ -311,6 +465,7 @@ async def get_dashboard(token: str):
                 "description": txn['description'],
                 "category": txn['category'],
                 "is_useful": txn['is_useful'],
+                "is_verified": txn['is_verified'],
                 "timestamp": txn['timestamp']
             })
             
@@ -320,6 +475,25 @@ async def get_dashboard(token: str):
                 "amount": cumulative_spend,
                 "transaction_id": txn['id']
             })
+        
+        # Calculate analytics
+        now = datetime.now()
+        days_in_month = (datetime(now.year, now.month + 1, 1) - timedelta(days=1)).day if now.month < 12 else 31
+        days_passed = now.day
+        
+        avg_daily = cumulative_spend / days_passed if days_passed > 0 else 0
+        avg_weekly = avg_daily * 7
+        predicted_monthly = avg_daily * days_in_month
+        
+        # Get heatmap data (last 365 days)
+        cursor.execute("""
+            SELECT date, has_savings FROM streak_history
+            WHERE user_id = ?
+            AND date >= date('now', '-365 days')
+            ORDER BY date ASC
+        """, (user['id'],))
+        
+        heatmap_data = [{"date": row[0], "count": row[1]} for row in cursor.fetchall()]
         
         budget_remaining = user['monthly_budget'] - cumulative_spend
         budget_usage = (cumulative_spend / user['monthly_budget'] * 100) if user['monthly_budget'] > 0 else 0
@@ -332,7 +506,31 @@ async def get_dashboard(token: str):
             "budget_remaining": round(budget_remaining, 2),
             "budget_usage_percent": round(budget_usage, 1),
             "transactions": transactions,
-            "chart_data": chart_data
+            "chart_data": chart_data,
+            
+            # New features
+            "coin_balance": user['coin_balance'],
+            "current_streak": user['current_streak'],
+            "longest_streak": user['longest_streak'],
+            "tree_progress": user['tree_progress'],
+            "total_trees_planted": user['total_trees_planted'],
+            "is_premium": user['is_premium'] == 1,
+            
+            # Analytics
+            "analytics": {
+                "avg_daily": round(avg_daily, 2),
+                "avg_weekly": round(avg_weekly, 2),
+                "predicted_monthly": round(predicted_monthly, 2),
+                "days_passed": days_passed,
+                "days_in_month": days_in_month,
+                "category_breakdown": [
+                    {"category": cat, "amount": amt, "percentage": round((amt / cumulative_spend * 100) if cumulative_spend > 0 else 0, 1)}
+                    for cat, amt in category_totals.items()
+                ]
+            },
+            
+            # Heatmap for streak visualization
+            "heatmap_data": heatmap_data
         }
 
 @app.post("/simulate_payment")
@@ -398,6 +596,209 @@ async def simulate_payment(request: SimulatePaymentRequest, token: str):
         "requires_pin": requires_pin,
         "can_approve": decision == "SAFE"
     }
+
+@app.post("/check_scam")
+async def check_scam(request: ScamCheckRequest, token: str):
+    """Check if a message is a scam (mock implementation - would use Gemini API in production)"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Mock scam detection logic
+    message_lower = request.message_text.lower()
+    
+    # Simple keyword-based detection
+    scam_keywords = ['urgent', 'verify', 'suspended', 'click here', 'prize', 'winner', 'bank account', 'password', 'otp', 'expire']
+    risk_score = 0
+    
+    for keyword in scam_keywords:
+        if keyword in message_lower:
+            risk_score += 15
+    
+    risk_score = min(risk_score, 100)
+    
+    if risk_score >= 70:
+        risk_level = "HIGH"
+        explanation = "This message contains multiple red flags commonly found in scam messages. Do not click any links or share personal information."
+    elif risk_score >= 40:
+        risk_level = "MEDIUM"
+        explanation = "This message shows some suspicious patterns. Verify the sender's identity before taking any action."
+    else:
+        risk_level = "LOW"
+        explanation = "This message appears relatively safe, but always exercise caution with unsolicited messages."
+    
+    # Save to database
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO scam_checks (user_id, message_text, risk_score, risk_level, explanation)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user['id'], request.message_text, risk_score, risk_level, explanation))
+        conn.commit()
+    
+    return {
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "explanation": explanation
+    }
+
+@app.get("/scam_history")
+async def get_scam_history(token: str):
+    """Get scam check history"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM scam_checks
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """, (user['id'],))
+        
+        history = []
+        for row in cursor.fetchall():
+            history.append({
+                "id": row[0],
+                "message_text": row[2][:100] + "..." if len(row[2]) > 100 else row[2],
+                "risk_score": row[3],
+                "risk_level": row[4],
+                "explanation": row[5],
+                "timestamp": row[6]
+            })
+        
+        return {"history": history}
+
+@app.post("/redeem_coins")
+async def redeem_coins(request: RedeemCoinsRequest, token: str):
+    """Redeem coins for rewards"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    if user['coin_balance'] < request.coins_required:
+        raise HTTPException(status_code=400, detail="Insufficient coins")
+    
+    # Generate mock redemption code
+    redemption_code = f"{request.brand.upper()}-{secrets.token_hex(4).upper()}"
+    
+    # Deduct coins and save redemption
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE users SET coin_balance = coin_balance - ?
+            WHERE id = ?
+        """, (request.coins_required, user['id']))
+        
+        cursor.execute("""
+            INSERT INTO coin_redemptions (user_id, brand, coins_spent, redemption_code)
+            VALUES (?, ?, ?, ?)
+        """, (user['id'], request.brand, request.coins_required, redemption_code))
+        
+        conn.commit()
+    
+    return {
+        "message": "Coins redeemed successfully",
+        "redemption_code": redemption_code,
+        "brand": request.brand,
+        "coins_spent": request.coins_required
+    }
+
+@app.get("/redemption_history")
+async def get_redemption_history(token: str):
+    """Get coin redemption history"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM coin_redemptions
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+        """, (user['id'],))
+        
+        history = []
+        for row in cursor.fetchall():
+            history.append({
+                "id": row[0],
+                "brand": row[2],
+                "coins_spent": row[3],
+                "redemption_code": row[4],
+                "timestamp": row[5]
+            })
+        
+        return {"history": history}
+
+@app.post("/upgrade_premium")
+async def upgrade_premium(token: str):
+    """Upgrade user to premium"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE users SET is_premium = 1
+            WHERE id = ?
+        """, (user['id'],))
+        conn.commit()
+    
+    return {"message": "Upgraded to premium successfully"}
+
+@app.post("/ai_advisor")
+async def ai_advisor(token: str):
+    """Get AI investment advice (mock implementation)"""
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    if user['is_premium'] != 1:
+        raise HTTPException(status_code=403, detail="Premium feature only")
+    
+    # Mock AI advice based on user's spending
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM transactions
+            WHERE user_id = ?
+            AND strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
+        """, (user['id'],))
+        current_spend = cursor.fetchone()[0]
+    
+    savings_potential = user['monthly_budget'] - current_spend
+    
+    advice = {
+        "summary": "Based on your spending patterns, here are personalized recommendations:",
+        "recommendations": [
+            {
+                "type": "SIP",
+                "title": "Start a Systematic Investment Plan",
+                "description": f"Consider investing ₹{int(savings_potential * 0.3)} monthly in diversified equity mutual funds for long-term wealth creation.",
+                "risk": "Medium"
+            },
+            {
+                "type": "Emergency Fund",
+                "title": "Build Emergency Corpus",
+                "description": f"Allocate ₹{int(savings_potential * 0.4)} to a liquid fund or high-interest savings account for emergencies.",
+                "risk": "Low"
+            },
+            {
+                "type": "ETF",
+                "title": "Index Fund Investment",
+                "description": f"Invest ₹{int(savings_potential * 0.3)} in low-cost index ETFs tracking Nifty 50 or Sensex for stable returns.",
+                "risk": "Medium"
+            }
+        ],
+        "disclaimer": "This is AI-generated advice for educational purposes. Consult a financial advisor before making investment decisions."
+    }
+    
+    return advice
 
 @app.get("/")
 async def root():

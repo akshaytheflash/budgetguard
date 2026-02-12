@@ -12,9 +12,19 @@ import {
     Lock,
     LogOut,
     ThumbsUp,
-    ThumbsDown
+    ThumbsDown,
+    Moon,
+    Sun
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import StreakDisplay from './StreakDisplay';
+import TreeProgress from './TreeProgress';
+import StreakHeatmap from './StreakHeatmap';
+import CoinRewards from './CoinRewards';
+import ScamDetector from './ScamDetector';
+import PremiumFeatures from './PremiumFeatures';
+import CategoryBreakdown from './CategoryBreakdown';
+import AnalyticsSummary from './AnalyticsSummary';
 
 const API_URL = 'http://localhost:8000';
 
@@ -29,6 +39,16 @@ export default function Dashboard({ token, username, onLogout }) {
     const [emergencyPin, setEmergencyPin] = useState('');
     const [useEmergency, setUseEmergency] = useState(false);
     const [pinError, setPinError] = useState('');
+    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+    };
 
     useEffect(() => {
         loadDashboard();
@@ -192,14 +212,24 @@ export default function Dashboard({ token, username, onLogout }) {
                         Welcome back, {username}!
                     </p>
                 </div>
-                <button
-                    className="btn btn-outline"
-                    onClick={onLogout}
-                    style={{ fontSize: '14px', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                    <LogOut size={18} />
-                    Logout
-                </button>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                        className="btn btn-outline"
+                        onClick={toggleTheme}
+                        style={{ fontSize: '14px', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                        {theme === 'dark' ? 'Light' : 'Dark'}
+                    </button>
+                    <button
+                        className="btn btn-outline"
+                        onClick={onLogout}
+                        style={{ fontSize: '14px', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
+                </div>
             </motion.div>
 
             {/* Stats Grid */}
@@ -276,6 +306,87 @@ export default function Dashboard({ token, username, onLogout }) {
                 </motion.div>
             </div >
 
+            {/* Streak and Tree Progress */}
+            <div className="grid grid-2" style={{ marginBottom: '32px' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                >
+                    <StreakDisplay
+                        currentStreak={userData.current_streak}
+                        longestStreak={userData.longest_streak}
+                    />
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                >
+                    <TreeProgress
+                        treeProgress={userData.tree_progress}
+                        totalTreesPlanted={userData.total_trees_planted}
+                    />
+                </motion.div>
+            </div>
+
+            {/* Coins and Premium */}
+            <div className="grid grid-2" style={{ marginBottom: '32px' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                >
+                    <CoinRewards
+                        token={token}
+                        coinBalance={userData.coin_balance}
+                        onRedemption={loadDashboard}
+                    />
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                >
+                    <PremiumFeatures
+                        token={token}
+                        isPremium={userData.is_premium}
+                        onUpgrade={loadDashboard}
+                    />
+                </motion.div>
+            </div>
+
+            {/* Analytics Summary */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+                style={{ marginBottom: '32px' }}
+            >
+                <AnalyticsSummary analytics={userData.analytics} />
+            </motion.div>
+
+            {/* Category Breakdown and Heatmap */}
+            <div className="grid grid-2" style={{ marginBottom: '32px' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.9 }}
+                >
+                    <CategoryBreakdown analytics={userData.analytics} />
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.0 }}
+                >
+                    <StreakHeatmap heatmapData={userData.heatmap_data || []} />
+                </motion.div>
+            </div>
+
             {/* Chart - Transaction Level */}
             {
                 chartData.length > 0 && (
@@ -322,7 +433,7 @@ export default function Dashboard({ token, username, onLogout }) {
             }
 
             {/* Action Buttons */}
-            <div className="grid grid-2" style={{ marginBottom: '32px' }}>
+            <div className="grid grid-3" style={{ marginBottom: '32px' }}>
                 <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -344,6 +455,8 @@ export default function Dashboard({ token, username, onLogout }) {
                     <Plus size={24} />
                     Add Expense
                 </motion.button>
+
+                <ScamDetector token={token} />
             </div>
 
             {/* Recent Transactions with Useful/Useless Marking */}

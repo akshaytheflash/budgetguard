@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Lock, LogIn, UserPlus } from 'lucide-react';
+import { User, Lock, LogIn, UserPlus, Mail, Phone } from 'lucide-react';
 
 const API_URL = 'http://localhost:8000';
 
 export default function Login({ onLogin }) {
     const [isRegister, setIsRegister] = useState(false);
     const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,10 +20,14 @@ export default function Login({ onLogin }) {
 
         try {
             const endpoint = isRegister ? '/register' : '/login';
+            const body = isRegister
+                ? { username, password, email: email || null, phone: phone || null }
+                : { username, password };
+
             const response = await fetch(`${API_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify(body)
             });
 
             const data = await response.json();
@@ -100,6 +106,52 @@ export default function Login({ onLogin }) {
                             />
                         </div>
                     </div>
+
+                    {isRegister && (
+                        <>
+                            <div className="input-group">
+                                <label className="input-label">Email (Optional)</label>
+                                <div style={{ position: 'relative' }}>
+                                    <Mail size={20} style={{
+                                        position: 'absolute',
+                                        left: '16px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        color: 'var(--text-secondary)'
+                                    }} />
+                                    <input
+                                        type="email"
+                                        className="input-field"
+                                        style={{ paddingLeft: '48px' }}
+                                        placeholder="your.email@example.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="input-group">
+                                <label className="input-label">Phone (Optional)</label>
+                                <div style={{ position: 'relative' }}>
+                                    <Phone size={20} style={{
+                                        position: 'absolute',
+                                        left: '16px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        color: 'var(--text-secondary)'
+                                    }} />
+                                    <input
+                                        type="tel"
+                                        className="input-field"
+                                        style={{ paddingLeft: '48px' }}
+                                        placeholder="+1 (555) 123-4567"
+                                        value={phone}
+                                        onChange={(e) => setPhone(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     <div className="input-group">
                         <label className="input-label">Password</label>
