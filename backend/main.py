@@ -9,6 +9,7 @@ import secrets
 from contextlib import contextmanager
 import google.generativeai as genai
 from dotenv import load_dotenv
+import os
 
 # Load environment variables (for local dev)
 load_dotenv()
