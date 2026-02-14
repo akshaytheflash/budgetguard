@@ -1,3 +1,16 @@
+import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import Login from './components/Login';
+import BudgetSetup from './components/BudgetSetup';
+import Dashboard from './components/Dashboard';
+import Home from './pages/Home';
+import Activity from './pages/Activity';
+import Rewards from './pages/Rewards';
+import Premium from './pages/Premium';
+import Security from './pages/Security';
+import './index.css';
+
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 function App() {
