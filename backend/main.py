@@ -760,6 +760,9 @@ async def redeem_coins(request: RedeemCoinsRequest, token: str):
 # Include the router with /api prefix
 app.include_router(router, prefix="/api")
 
+# Also include router without prefix to handle cases where Vercel might strip the prefix
+app.include_router(router)
+
 if __name__ == "__main__":
     import uvicorn
     # Use standard port 8000
