@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Crown, TrendingUp, DollarSign, PieChart, X } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function PremiumFeatures({ token, isPremium, onUpgrade }) {
     const [showModal, setShowModal] = useState(false);

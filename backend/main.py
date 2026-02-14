@@ -20,7 +20,28 @@ app.add_middleware(
 )
 
 # Database setup
-DB_PATH = "budgetguard.db"
+import os
+import shutil
+
+# Database setup
+# On Vercel, we can only write to /tmp.
+# We check if we are on Vercel (or just use /tmp by default for cloud deploy)
+if os.environ.get("VERCEL") or not os.access(".", os.W_OK):
+    DB_PATH = "/tmp/budgetguard.db"
+else:
+    DB_PATH = "budgetguard.db"
+
+# Helper to ensure DB exists in /tmp if needed
+def ensure_db_exists():
+    if DB_PATH.startswith("/tmp") and not os.path.exists(DB_PATH):
+        # If we have a local seed file, copy it
+        if os.path.exists("budgetguard.db"):
+            shutil.copy2("budgetguard.db", DB_PATH)
+        else:
+            # Otherwise allow init_db to create it
+            pass
+
+ensure_db_exists()
 
 @contextmanager
 def get_db():

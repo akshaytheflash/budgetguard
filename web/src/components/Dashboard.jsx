@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import Navbar from './Navbar';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Dashboard({ token, username, onLogout }) {
     const [userData, setUserData] = useState(null);

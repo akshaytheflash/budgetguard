@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Gift, X, Sparkles } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const REWARDS = [
     { brand: 'Amazon', coins: 100, discount: '₹50 off' },

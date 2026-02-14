@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Lock, LogIn, UserPlus, Mail, Phone } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Login({ onLogin }) {
     const [isRegister, setIsRegister] = useState(false);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function ScamDetector({ token }) {
     const [showModal, setShowModal] = useState(false);
@@ -139,8 +139,8 @@ export default function ScamDetector({ token }) {
                                     </motion.div>
 
                                     <div className={`badge ${result.risk_level === 'HIGH' ? 'badge-blocked' :
-                                            result.risk_level === 'MEDIUM' ? 'badge-warning' :
-                                                'badge-safe'
+                                        result.risk_level === 'MEDIUM' ? 'badge-warning' :
+                                            'badge-safe'
                                         }`} style={{ marginBottom: '16px' }}>
                                         {result.risk_level} RISK
                                     </div>
