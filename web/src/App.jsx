@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Login from './components/Login';
 import BudgetSetup from './components/BudgetSetup';
 import Dashboard from './components/Dashboard';
+import Home from './pages/Home';
+import Activity from './pages/Activity';
+import Rewards from './pages/Rewards';
+import Premium from './pages/Premium';
+import Security from './pages/Security';
 import './index.css';
 
 const API_URL = 'http://localhost:8000';
@@ -12,6 +18,7 @@ function App() {
   const [username, setUsername] = useState(localStorage.getItem('username'));
   const [isSetup, setIsSetup] = useState(false);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     if (token) {
@@ -82,42 +89,36 @@ function App() {
     );
   }
 
+  // Auth Flow
+  if (!token) {
+    return (
+      <div className="app">
+        <Login onLogin={handleLogin} />
+      </div>
+    );
+  }
+
+  if (!isSetup) {
+    return (
+      <div className="app">
+        <BudgetSetup onComplete={handleBudgetSetup} />
+      </div>
+    );
+  }
+
+  // Dashboard & Routes
   return (
     <div className="app">
-      <AnimatePresence mode="wait">
-        {!token ? (
-          <motion.div
-            key="login"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <Login onLogin={handleLogin} />
-          </motion.div>
-        ) : !isSetup ? (
-          <motion.div
-            key="setup"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <BudgetSetup onComplete={handleBudgetSetup} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="dashboard"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <Dashboard
-              token={token}
-              username={username}
-              onLogout={handleLogout}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Routes>
+        <Route path="/" element={<Dashboard token={token} username={username} onLogout={handleLogout} />}>
+          <Route index element={<Home />} />
+          <Route path="activity" element={<Activity />} />
+          <Route path="rewards" element={<Rewards />} />
+          <Route path="premium" element={<Premium />} />
+          <Route path="security" element={<Security />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
     </div>
   );
 }

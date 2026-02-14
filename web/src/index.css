@@ -351,3 +351,6 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary-start);
 }
+.page-content {
+  padding-bottom: 100px;
+}

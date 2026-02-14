@@ -63,15 +63,12 @@ export default function Login({ onLogin }) {
                         style={{
                             width: '80px',
                             height: '80px',
-                            background: 'var(--gradient-primary)',
-                            borderRadius: '24px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            margin: '0 auto 20px'
+                            margin: '0 auto 20px',
+                            borderRadius: '16px',
+                            overflow: 'hidden'
                         }}
                     >
-                        {isRegister ? <UserPlus size={40} color="white" /> : <LogIn size={40} color="white" />}
+                        <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     </motion.div>
 
                     <h1 style={{ fontSize: '32px', fontWeight: '800', marginBottom: '12px' }}>
