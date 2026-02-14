@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 
@@ -62,8 +63,8 @@ export default function ScamDetector({ token }) {
                 Scam Detector
             </motion.button>
 
-            <AnimatePresence>
-                {showModal && (
+            {showModal && createPortal(
+                <AnimatePresence>
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -124,61 +125,146 @@ export default function ScamDetector({ token }) {
                                 <motion.div
                                     initial={{ scale: 0.8, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
-                                    style={{ textAlign: 'center' }}
                                 >
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{ type: 'spring', delay: 0.2 }}
-                                        style={{
-                                            marginBottom: '24px',
-                                            color: getRiskColor(result.risk_level)
-                                        }}
-                                    >
-                                        {getRiskIcon(result.risk_level)}
-                                    </motion.div>
+                                    {/* Header with Icon and Risk Level */}
+                                    <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                                        <motion.div
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ type: 'spring', delay: 0.2 }}
+                                            style={{
+                                                marginBottom: '16px',
+                                                color: getRiskColor(result.risk_level),
+                                                display: 'flex',
+                                                justifyContent: 'center'
+                                            }}
+                                        >
+                                            {getRiskIcon(result.risk_level)}
+                                        </motion.div>
 
-                                    <div className={`badge ${result.risk_level === 'HIGH' ? 'badge-blocked' :
-                                        result.risk_level === 'MEDIUM' ? 'badge-warning' :
-                                            'badge-safe'
-                                        }`} style={{ marginBottom: '16px' }}>
-                                        {result.risk_level} RISK
+                                        <div className={`badge ${result.risk_level === 'HIGH' ? 'badge-blocked' :
+                                            result.risk_level === 'MEDIUM' ? 'badge-warning' :
+                                                'badge-safe'
+                                            }`} style={{ marginBottom: '12px' }}>
+                                            {result.risk_level} RISK
+                                        </div>
+
+                                        <div style={{
+                                            fontSize: '56px',
+                                            fontWeight: '800',
+                                            marginBottom: '8px',
+                                            background: `linear-gradient(135deg, ${getRiskColor(result.risk_level)}, ${getRiskColor(result.risk_level)}dd)`,
+                                            WebkitBackgroundClip: 'text',
+                                            WebkitTextFillColor: 'transparent',
+                                            backgroundClip: 'text'
+                                        }}>
+                                            {result.risk_score}%
+                                        </div>
+
+                                        <p style={{
+                                            color: 'var(--text-secondary)',
+                                            fontSize: '14px',
+                                            fontWeight: '600'
+                                        }}>
+                                            Risk Score
+                                        </p>
                                     </div>
 
+                                    {/* AI Analysis Section */}
                                     <div style={{
-                                        fontSize: '48px',
-                                        fontWeight: '800',
-                                        marginBottom: '8px',
-                                        color: getRiskColor(result.risk_level)
+                                        background: 'var(--bg-dark)',
+                                        border: `2px solid ${getRiskColor(result.risk_level)}33`,
+                                        borderRadius: '16px',
+                                        padding: '20px',
+                                        marginBottom: '20px'
                                     }}>
-                                        {result.risk_score}%
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            marginBottom: '12px'
+                                        }}>
+                                            <MessageSquare size={20} style={{ color: getRiskColor(result.risk_level) }} />
+                                            <h3 style={{
+                                                fontSize: '16px',
+                                                fontWeight: '700',
+                                                color: 'var(--text-primary)',
+                                                margin: 0
+                                            }}>
+                                                AI Analysis
+                                            </h3>
+                                        </div>
+                                        <p style={{
+                                            color: 'var(--text-primary)',
+                                            lineHeight: '1.7',
+                                            fontSize: '15px',
+                                            margin: 0
+                                        }}>
+                                            {result.explanation}
+                                        </p>
                                     </div>
 
-                                    <p style={{
-                                        color: 'var(--text-secondary)',
-                                        marginBottom: '24px',
-                                        lineHeight: '1.6'
+                                    {/* Analyzed Message Preview */}
+                                    <div style={{
+                                        background: 'var(--bg-dark)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px',
+                                        padding: '16px',
+                                        marginBottom: '24px'
                                     }}>
-                                        {result.explanation}
-                                    </p>
+                                        <div style={{
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            color: 'var(--text-secondary)',
+                                            marginBottom: '8px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.5px'
+                                        }}>
+                                            Analyzed Message
+                                        </div>
+                                        <p style={{
+                                            color: 'var(--text-secondary)',
+                                            fontSize: '14px',
+                                            lineHeight: '1.6',
+                                            margin: 0,
+                                            maxHeight: '100px',
+                                            overflowY: 'auto',
+                                            fontStyle: 'italic'
+                                        }}>
+                                            "{messageText.length > 200 ? messageText.substring(0, 200) + '...' : messageText}"
+                                        </p>
+                                    </div>
 
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={() => {
-                                            setShowModal(false);
-                                            setResult(null);
-                                            setMessageText('');
-                                        }}
-                                        style={{ width: '100%' }}
-                                    >
-                                        Done
-                                    </button>
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                        <button
+                                            className="btn btn-outline"
+                                            onClick={() => {
+                                                setResult(null);
+                                            }}
+                                            style={{ flex: 1 }}
+                                        >
+                                            Check Another
+                                        </button>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => {
+                                                setShowModal(false);
+                                                setResult(null);
+                                                setMessageText('');
+                                            }}
+                                            style={{ flex: 1 }}
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
                                 </motion.div>
                             )}
                         </motion.div>
                     </motion.div>
-                )}
-            </AnimatePresence>
+                </AnimatePresence>,
+                document.body
+            )}
         </>
     );
 }

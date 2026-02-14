@@ -7,8 +7,21 @@ import sqlite3
 import hashlib
 import secrets
 from contextlib import contextmanager
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables (for local dev)
+load_dotenv()
 
 app = FastAPI(title="BudgetGuard API v2")
+
+# Configure Gemini API
+# On Vercel, this will come from environment variables
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    print("⚠️ Warning: GEMINI_API_KEY not found in environment variables")
 
 # Enable CORS
 app.add_middleware(
@@ -620,33 +633,100 @@ async def simulate_payment(request: SimulatePaymentRequest, token: str):
 
 @app.post("/check_scam")
 async def check_scam(request: ScamCheckRequest, token: str):
-    """Check if a message is a scam (mock implementation - would use Gemini API in production)"""
+    """Check if a message is a scam using Gemini API"""
     user = get_user_from_token(token)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Mock scam detection logic
-    message_lower = request.message_text.lower()
+    print(f"\n{'='*60}")
+    print(f"🔍 SCAM CHECK REQUEST")
+    print(f"{'='*60}")
+    print(f"Message: {request.message_text[:100]}...")
     
-    # Simple keyword-based detection
-    scam_keywords = ['urgent', 'verify', 'suspended', 'click here', 'prize', 'winner', 'bank account', 'password', 'otp', 'expire']
-    risk_score = 0
-    
-    for keyword in scam_keywords:
-        if keyword in message_lower:
-            risk_score += 15
-    
-    risk_score = min(risk_score, 100)
-    
-    if risk_score >= 70:
-        risk_level = "HIGH"
-        explanation = "This message contains multiple red flags commonly found in scam messages. Do not click any links or share personal information."
-    elif risk_score >= 40:
-        risk_level = "MEDIUM"
-        explanation = "This message shows some suspicious patterns. Verify the sender's identity before taking any action."
-    else:
+    try:
+        # Use Gemini API for scam detection
+        print("📡 Calling Gemini API with model: gemma-3-27b-it")
+        model = genai.GenerativeModel('gemma-3-27b-it')
+        
+        prompt = f"""Analyze the following message and determine if it's a scam or phishing attempt.
+        
+Message: "{request.message_text}"
+        
+Provide your analysis in the following format:
+Risk Score: [0-100]
+Risk Level: [LOW/MEDIUM/HIGH]
+Explanation: [Brief explanation of why this message is or isn't a scam]
+        
+Be concise and focus on specific red flags or safety indicators."""
+        
+        response = model.generate_content(prompt)
+        response_text = response.text
+        
+        print(f"✅ Gemini API Response:")
+        print(f"{response_text}")
+        print(f"{'='*60}\n")
+        
+        # Parse the response
+        risk_score = 0
         risk_level = "LOW"
-        explanation = "This message appears relatively safe, but always exercise caution with unsolicited messages."
+        explanation = response_text
+        
+        # Extract risk score
+        if "Risk Score:" in response_text:
+            try:
+                score_line = [line for line in response_text.split('\n') if 'Risk Score:' in line][0]
+                risk_score = int(''.join(filter(str.isdigit, score_line)))
+                risk_score = min(max(risk_score, 0), 100)  # Clamp between 0-100
+            except:
+                risk_score = 50  # Default to medium if parsing fails
+        
+        # Extract risk level
+        if "Risk Level:" in response_text:
+            try:
+                level_line = [line for line in response_text.split('\n') if 'Risk Level:' in line][0]
+                if "HIGH" in level_line.upper():
+                    risk_level = "HIGH"
+                elif "MEDIUM" in level_line.upper():
+                    risk_level = "MEDIUM"
+                else:
+                    risk_level = "LOW"
+            except:
+                pass
+        
+        # Extract explanation
+        if "Explanation:" in response_text:
+            try:
+                explanation_parts = response_text.split('Explanation:', 1)
+                if len(explanation_parts) > 1:
+                    explanation = explanation_parts[1].strip()
+            except:
+                pass
+        
+    except Exception as e:
+        # Fallback to keyword-based detection if API fails
+        print(f"❌ Gemini API Error: {str(e)}")
+        print(f"⚠️  Falling back to keyword-based detection")
+        print(f"{'='*60}\n")
+        
+        message_lower = request.message_text.lower()
+        scam_keywords = ['urgent', 'verify', 'suspended', 'click here', 'prize', 'winner', 'bank account', 'password', 'otp', 'expire']
+        risk_score = 0
+        
+        for keyword in scam_keywords:
+            if keyword in message_lower:
+                risk_score += 15
+        
+        risk_score = min(risk_score, 100)
+        
+        if risk_score >= 70:
+            risk_level = "HIGH"
+            explanation = "This message contains multiple red flags commonly found in scam messages. Do not click any links or share personal information."
+        elif risk_score >= 40:
+            risk_level = "MEDIUM"
+            explanation = "This message shows some suspicious patterns. Verify the sender's identity before taking any action."
+        else:
+            risk_level = "LOW"
+            explanation = "This message appears relatively safe, but always exercise caution with unsolicited messages."
     
     # Save to database
     with get_db() as conn:
