@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
+from starlette.types import ASGIApp, Scope, Receive, Send
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -13,6 +14,27 @@ import os
 
 # Load environment variables (for local dev)
 load_dotenv()
+
+class VercelMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            path = scope["path"]
+            if path.startswith("/api/"):
+                scope["path"] = path[4:]
+                if scope.get("root_path"):
+                    scope["root_path"] = "/api" + scope["root_path"]
+                else:
+                    scope["root_path"] = "/api"
+            elif path == "/api":
+                scope["path"] = "/"
+                if scope.get("root_path"):
+                    scope["root_path"] = "/api" + scope["root_path"]
+                else:
+                    scope["root_path"] = "/api"
+        await self.app(scope, receive, send)
 
 app = FastAPI(title="BudgetGuard API v2")
 
@@ -32,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if os.environ.get("VERCEL"):
+    app.add_middleware(VercelMiddleware)
 
 # Database setup
 import os
