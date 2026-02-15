@@ -86,7 +86,8 @@ export default function Dashboard({ token, username, onLogout }) {
 
     const approvePayment = async () => {
         try {
-            const url = new URL(`${API_URL}/add_transaction`);
+            const url = new URL(`${API_URL}/add_transaction`, window.location.origin);
+
             url.searchParams.append('token', token);
             if (emergencyPin) {
                 url.searchParams.append('emergency_pin', emergencyPin);
