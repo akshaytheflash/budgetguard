@@ -10,8 +10,6 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
 
     const [hoveredCell, setHoveredCell] = useState(null);
 
-
-
     useEffect(() => {
         localStorage.setItem('dailyLimit', dailyLimit);
     }, [dailyLimit]);
@@ -21,28 +19,49 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
+    // Build daily totals map from transactions
+    const dailyTotals = {};
+
+    if (transactions && Array.isArray(transactions)) {
+        transactions.forEach(t => {
+            try {
+                // Parse the timestamp - handle "YYYY-MM-DD HH:MM:SS" format
+                let dateStr = t.timestamp;
+
+                // Convert to ISO format if needed
+                if (dateStr && !dateStr.includes('T')) {
+                    dateStr = dateStr.replace(' ', 'T');
+                }
+
+                // Parse as local time (SQLite stores in UTC but we display in local)
+                const date = new Date(dateStr);
+
+                if (!isNaN(date.getTime())) {
+                    // Get the day of month in local timezone
+                    const month = date.getMonth();
+                    const year = date.getFullYear();
+                    const day = date.getDate();
+
+                    // Only count transactions from current month
+                    if (month === currentMonth && year === currentYear) {
+                        if (!dailyTotals[day]) {
+                            dailyTotals[day] = 0;
+                        }
+                        dailyTotals[day] += t.amount;
+                    }
+                }
+            } catch (err) {
+                console.error('Error parsing transaction:', err, t);
+            }
+        });
+    }
+
     // Helper to get day index (Monday = 0, Sunday = 6)
     const getDayIndex = (date) => (date.getDay() + 6) % 7;
 
-    // Helper to check transactions for a specific date
+    // Helper to check status for a specific date
     const getStatusForDate = (dayOfMonth) => {
-        const date = new Date(currentYear, currentMonth, dayOfMonth);
-
-        // Validate date exists in this month
-        if (date.getMonth() !== currentMonth) return 'invalid';
-
-        const dateStr = date.toLocaleDateString('en-CA'); // YYYY-MM-DD
-
-        // Filter transactions for this date
-        // Note: transaction timestamps might include time, so we need to match only the date part
-        const dailyTotal = transactions
-            ? transactions
-                .filter(t => {
-                    const tDate = new Date(t.timestamp).toLocaleDateString('en-CA');
-                    return tDate === dateStr;
-                })
-                .reduce((sum, t) => sum + t.amount, 0)
-            : 0;
+        const dailyTotal = dailyTotals[dayOfMonth] || 0;
 
         if (dailyTotal === 0) return 'no-data';
         return dailyTotal <= dailyLimit ? 'on-budget' : 'overspent';
@@ -150,8 +169,11 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
                                             if (!isValid) return;
                                             const rect = e.currentTarget.getBoundingClientRect();
                                             const date = new Date(currentYear, currentMonth, dateNum);
+                                            const amount = dailyTotals[dateNum] || 0;
+
                                             setHoveredCell({
-                                                text: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+                                                text: `${date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+                                                subText: amount > 0 ? `$${amount.toFixed(2)}` : 'No Activity',
                                                 x: rect.left + rect.width / 2,
                                                 y: rect.top - 8
                                             });
@@ -164,14 +186,13 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
                                             background: color,
                                             border: `1px solid ${isValid ? (status === 'no-data' ? 'var(--border)' : color) : 'var(--border)'}`,
                                             marginRight: '4px',
-                                            opacity: isValid ? 1 : 0.3, // Fade out invalid/impossible dates slightly or keep consistent grid
+                                            opacity: isValid ? 1 : 0.3,
                                             cursor: isValid ? 'pointer' : 'default',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center'
                                         }}
                                     >
-                                        {/* Optional: Add indicators or tooltips here */}
                                     </motion.div>
                                 );
                             })}
@@ -195,15 +216,16 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
                     <span>Overspent</span>
                 </div>
             </div>
-            {/* Tooltip Portal/Overlay */}
+
+            {/* Tooltip Portal */}
             {hoveredCell && createPortal(
                 <div style={{
                     position: 'fixed',
                     left: hoveredCell.x,
                     top: hoveredCell.y,
                     transform: 'translate(-50%, -100%)',
-                    background: 'var(--bg-card)', // Use theme background if possible, or black
-                    backgroundColor: 'rgba(20, 20, 20, 0.9)', // Fallback dark
+                    background: 'var(--bg-card)',
+                    backgroundColor: 'rgba(20, 20, 20, 0.95)',
                     color: 'white',
                     padding: '8px 12px',
                     borderRadius: '8px',
@@ -213,10 +235,14 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
                     zIndex: 9999,
                     whiteSpace: 'nowrap',
                     border: '1px solid var(--border)',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-                    marginBottom: '8px'
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    marginBottom: '8px',
+                    textAlign: 'center'
                 }}>
-                    {hoveredCell.text}
+                    <div>{hoveredCell.text}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '11px', marginTop: '2px' }}>
+                        {hoveredCell.subText}
+                    </div>
                     <div style={{
                         position: 'absolute',
                         bottom: '-4px',
@@ -224,7 +250,7 @@ export default function StreakHeatmap({ heatmapData, transactions }) {
                         transform: 'translateX(-50%) rotate(45deg)',
                         width: '8px',
                         height: '8px',
-                        background: 'rgba(20, 20, 20, 0.9)',
+                        background: 'rgba(20, 20, 20, 0.95)',
                         borderRight: '1px solid var(--border)',
                         borderBottom: '1px solid var(--border)'
                     }} />

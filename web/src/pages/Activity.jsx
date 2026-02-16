@@ -12,7 +12,7 @@ export default function Activity() {
     const chartData = userData.chart_data.map((point, index) => ({
         index: index + 1,
         amount: point.amount,
-        timestamp: new Date(point.timestamp).toLocaleTimeString('en-US', {
+        timestamp: new Date(point.timestamp.replace(' ', 'T') + (point.timestamp.includes('Z') ? '' : 'Z')).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit'
         })
@@ -94,7 +94,10 @@ export default function Activity() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.4 }}
                 >
-                    <StreakHeatmap heatmapData={userData.heatmap_data || []} />
+                    <StreakHeatmap
+                        heatmapData={userData.heatmap_data || []}
+                        transactions={userData.transactions || []}
+                    />
                 </motion.div>
             </div>
 

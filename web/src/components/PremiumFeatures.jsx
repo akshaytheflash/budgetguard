@@ -9,19 +9,29 @@ export default function PremiumFeatures({ token, isPremium, onUpgrade }) {
     const [showAdvice, setShowAdvice] = useState(false);
     const [advice, setAdvice] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [upgrading, setUpgrading] = useState(false);
 
     const handleUpgrade = async () => {
+        setUpgrading(true);
         try {
             const response = await fetch(`${API_URL}/upgrade_premium?token=${token}`, {
                 method: 'POST'
             });
 
             if (response.ok) {
-                onUpgrade();
+                // Wait for dashboard to reload
+                await onUpgrade();
+                // Small delay to show success state
+                await new Promise(resolve => setTimeout(resolve, 500));
                 setShowModal(false);
+            } else {
+                alert('Failed to upgrade. Please try again.');
             }
         } catch (error) {
             console.error('Upgrade error:', error);
+            alert('Failed to upgrade. Please try again.');
+        } finally {
+            setUpgrading(false);
         }
     };
 
@@ -156,9 +166,10 @@ export default function PremiumFeatures({ token, isPremium, onUpgrade }) {
                                         <button
                                             className="btn btn-primary"
                                             onClick={handleUpgrade}
+                                            disabled={upgrading}
                                             style={{ flex: 1 }}
                                         >
-                                            Upgrade Now (Free)
+                                            {upgrading ? 'Upgrading...' : 'Upgrade Now (Free)'}
                                         </button>
                                     </div>
                                 </div>
