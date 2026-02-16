@@ -84,6 +84,18 @@ export default function Dashboard({ token, username, onLogout }) {
         }
     };
 
+    const resetState = () => {
+        setShowPaymentModal(false);
+        setShowAddExpense(false);
+        setShowResult(false);
+        setPrediction(null);
+        setPinError('');
+        setPaymentAmount('');
+        setPaymentDesc('');
+        setUseEmergency(false);
+        setEmergencyPin('');
+    };
+
     const approvePayment = async () => {
         try {
             const url = new URL(`${API_URL}/add_transaction`, window.location.origin);
@@ -117,15 +129,7 @@ export default function Dashboard({ token, username, onLogout }) {
                 throw new Error(error.detail || 'Failed to add transaction');
             }
 
-            setShowPaymentModal(false);
-            setShowAddExpense(false);
-            setShowResult(false);
-            setPrediction(null);
-            setPinError('');
-            setPaymentAmount('');
-            setPaymentDesc('');
-            setUseEmergency(false);
-            setEmergencyPin('');
+            resetState();
             loadDashboard();
         } catch (error) {
             console.error('Failed to add transaction:', error);
@@ -152,7 +156,6 @@ export default function Dashboard({ token, username, onLogout }) {
     const addManualExpense = async (e) => {
         e.preventDefault();
         await approvePayment();
-        setShowAddExpense(false);
     };
 
     if (!userData) {
@@ -169,6 +172,8 @@ export default function Dashboard({ token, username, onLogout }) {
             </div>
         );
     }
+
+    const requiresPin = userData && paymentAmount && (parseFloat(paymentAmount) > userData.budget_remaining);
 
     return (
         <div className="container">
@@ -205,7 +210,7 @@ export default function Dashboard({ token, username, onLogout }) {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="modal-overlay"
-                        onClick={() => !showResult && setShowPaymentModal(false)}
+                        onClick={() => !showResult && resetState()}
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
@@ -257,7 +262,7 @@ export default function Dashboard({ token, username, onLogout }) {
                                     <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                                         <button
                                             className="btn btn-outline"
-                                            onClick={() => setShowPaymentModal(false)}
+                                            onClick={resetState}
                                             style={{ flex: 1 }}
                                         >
                                             Cancel
@@ -275,12 +280,7 @@ export default function Dashboard({ token, username, onLogout }) {
                                 <PaymentResult
                                     prediction={prediction}
                                     onApprove={approvePayment}
-                                    onCancel={() => {
-                                        setShowPaymentModal(false);
-                                        setShowResult(false);
-                                        setPrediction(null);
-                                        setPinError('');
-                                    }}
+                                    onCancel={resetState}
                                     onUseEmergency={() => setUseEmergency(true)}
                                     useEmergency={useEmergency}
                                     emergencyPin={emergencyPin}
@@ -302,7 +302,7 @@ export default function Dashboard({ token, username, onLogout }) {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="modal-overlay"
-                        onClick={() => setShowAddExpense(false)}
+                        onClick={resetState}
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
@@ -352,42 +352,54 @@ export default function Dashboard({ token, username, onLogout }) {
                                     />
                                 </div>
 
-                                {useEmergency && (
-                                    <div className="input-group">
-                                        <label className="input-label">Emergency PIN Required</label>
-                                        <input
-                                            type="password"
-                                            className="input-field"
-                                            style={{ letterSpacing: '8px', textAlign: 'center', fontSize: '20px' }}
-                                            placeholder="••••"
-                                            value={emergencyPin}
-                                            onChange={(e) => {
-                                                setEmergencyPin(e.target.value);
-                                                setPinError('');
-                                            }}
-                                            maxLength="6"
-                                            required
-                                        />
-                                        {pinError && (
-                                            <p style={{ fontSize: '14px', color: 'var(--danger)', marginTop: '8px', fontWeight: 'bold' }}>
-                                                {pinError}
+                                <AnimatePresence>
+                                    {(requiresPin || useEmergency) && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="input-group"
+                                            style={{ overflow: 'hidden' }}
+                                        >
+                                            <div style={{ height: '16px' }} /> {/* Gap */}
+                                            <label className="input-label" style={{ color: 'var(--warning)' }}>
+                                                Emergency PIN Required
+                                            </label>
+                                            <input
+                                                type="password"
+                                                className="input-field"
+                                                style={{
+                                                    letterSpacing: '8px',
+                                                    textAlign: 'center',
+                                                    fontSize: '20px',
+                                                    borderColor: pinError ? 'var(--danger)' : 'var(--warning)'
+                                                }}
+                                                placeholder="••••"
+                                                value={emergencyPin}
+                                                onChange={(e) => {
+                                                    setEmergencyPin(e.target.value);
+                                                    setPinError('');
+                                                }}
+                                                maxLength="6"
+                                                required
+                                            />
+                                            {pinError && (
+                                                <p style={{ fontSize: '14px', color: 'var(--danger)', marginTop: '8px', fontWeight: 'bold' }}>
+                                                    {pinError}
+                                                </p>
+                                            )}
+                                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                                Amount exceeds remaining budget. Authorization required.
                                             </p>
-                                        )}
-                                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                                            This expense requires emergency fund approval
-                                        </p>
-                                    </div>
-                                )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
                                 <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                                     <button
                                         type="button"
                                         className="btn btn-outline"
-                                        onClick={() => {
-                                            setShowAddExpense(false);
-                                            setUseEmergency(false);
-                                            setEmergencyPin('');
-                                        }}
+                                        onClick={resetState}
                                         style={{ flex: 1 }}
                                     >
                                         Cancel
@@ -405,7 +417,7 @@ export default function Dashboard({ token, username, onLogout }) {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div >
+        </div>
     );
 }
 
